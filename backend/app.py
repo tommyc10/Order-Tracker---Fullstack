@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
 from mysql.connector import Error
+import yfinance as yf
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -98,7 +99,28 @@ def delete_trade(trade_id):
     conn.close()
     return jsonify({"message": "Trade deleted"})
 
+
+# stock ticker
+@app.route("/top-stocks")
+def get_top_stocks():
+    try:
+        tickers = ["AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "NVDA", "NFLX", "META", "AMD", "INTC"]
+        stock_data = []
+
+        for symbol in tickers:
+            stock = yf.Ticker(symbol)
+            data = stock.info
+            stock_data.append({
+                "symbol": symbol,
+                "price": round(data.get("currentPrice", 0), 2),
+                "changePercent": round(data.get("regularMarketChangePercent", 0), 2)
+            })
+
+        return jsonify(stock_data)
+    except Exception as e:
+        print("Error fetching Yahoo stock data:", e)
+        return jsonify({"error": "Failed to fetch stocks"}), 500
+    
+
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
-
-

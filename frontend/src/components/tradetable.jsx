@@ -1,3 +1,5 @@
+import TradeRow from "./traderow";
+
 
 function TradeTable({ trades, onDelete }) {
   return (

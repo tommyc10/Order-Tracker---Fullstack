@@ -1,10 +1,21 @@
+/* Reset layout container */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  text-align: left;
+  background-color: #181A20;
+  color: white;
+  font-family: 'Inter', Arial, sans-serif;
 }
 
+/* Optional: remove default body padding/margin */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Logo styling (can be removed if unused) */
 .logo {
   height: 6em;
   padding: 1.5em;
@@ -18,6 +29,7 @@
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
+/* Logo animation */
 @keyframes logo-spin {
   from {
     transform: rotate(0deg);
@@ -26,17 +38,16 @@
     transform: rotate(360deg);
   }
 }
-
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;
   }
 }
 
+/* Card and doc link styling (if still used) */
 .card {
   padding: 2em;
 }
-
 .read-the-docs {
   color: #888;
 }
