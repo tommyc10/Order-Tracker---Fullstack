@@ -100,76 +100,53 @@ def delete_trade(trade_id):
     return jsonify({"message": "Trade deleted"})
 
 
-# stock ticker
+# Stock data endpoint
 @app.route("/top-stocks")
 def get_top_stocks():
-    # List of major stock symbols
-    symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'NFLX', 'META', 'AMD', 'INTC']
+    # List of major tech stocks
+    symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN']
     try:
+        # Fetch all stock data in one batch
+        data = yf.download(
+            ' '.join(symbols),
+            period='1d',
+            interval='1d',
+            group_by='ticker',
+            progress=False,
+            timeout=20
+        )
+        
         stocks_data = []
         for symbol in symbols:
-            stock = yf.Ticker(symbol)
-            info = stock.info
-            stocks_data.append({
-                'symbol': symbol,
-                'price': info.get('regularMarketPrice', 0),
-                'changePercent': info.get('regularMarketChangePercent', 0)
-            })
-        return jsonify(stocks_data)
-    except Exception as e:
-        print(f"Error fetching stock data: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/all-stocks")
-def get_all_stocks():
-    # Get S&P 500 symbols
-    sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    import pandas as pd
-    try:
-        df = pd.read_html(sp500_url)[0]
-        symbols = df['Symbol'].tolist()[:100]  # Get first 100 symbols for better performance
-        
-        # Fetch data in batches
-        batch_size = 10
-        stocks_data = []
-        
-        for i in range(0, len(symbols), batch_size):
-            batch_symbols = symbols[i:i + batch_size]
-            # Create a string of symbols for batch download
-            symbols_str = ' '.join(batch_symbols)
-            
             try:
-                # Download data for the batch
-                data = yf.download(symbols_str, period='1d', group_by='ticker', progress=False)
+                # Get stock data (handles both single and multiple stock cases)
+                if len(symbols) == 1:
+                    close_price = data['Close'].iloc[-1]
+                    open_price = data['Open'].iloc[0]
+                else:
+                    close_price = data[symbol]['Close'].iloc[-1]
+                    open_price = data[symbol]['Open'].iloc[0]
                 
-                # Process each symbol in the batch
-                for symbol in batch_symbols:
-                    try:
-                        if isinstance(data, pd.DataFrame):
-                            # Single symbol case
-                            price = data['Close'].iloc[-1]
-                            prev_price = data['Open'].iloc[0]
-                        else:
-                            # Multiple symbols case
-                            price = data[symbol]['Close'].iloc[-1]
-                            prev_price = data[symbol]['Open'].iloc[0]
-                            
-                        change_percent = ((price - prev_price) / prev_price) * 100
-                        
-                        stocks_data.append({
-                            'symbol': symbol,
-                            'price': round(price, 2),
-                            'changePercent': round(change_percent, 2)
-                        })
-                    except Exception as e:
-                        print(f"Error processing {symbol}: {str(e)}")
-                        continue
-                        
+                # Calculate change percentage
+                change_percent = ((close_price - open_price) / open_price) * 100
+                
+                # Add to results
+                stocks_data.append({
+                    'symbol': symbol,
+                    'price': round(float(close_price), 2),
+                    'changePercent': round(float(change_percent), 2)
+                })
+                
             except Exception as e:
-                print(f"Error fetching batch: {str(e)}")
+                print(f"Error processing {symbol}: {str(e)}")
                 continue
         
+        # Return error if no data was fetched
+        if not stocks_data:
+            return jsonify({"error": "Failed to fetch stock data"}), 500
+            
         return jsonify(stocks_data)
+        
     except Exception as e:
         print(f"Error fetching stock data: {e}")
         return jsonify({"error": str(e)}), 500

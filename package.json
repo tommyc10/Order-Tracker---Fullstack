@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "bootstrap": "^5.3.7",
+    "lucide-react": "^0.536.0"
+  },
+  "devDependencies": {
+  
+  }
+}
