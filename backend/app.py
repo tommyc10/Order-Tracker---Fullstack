@@ -103,10 +103,8 @@ def delete_trade(trade_id):
 # Stock data endpoint
 @app.route("/top-stocks")
 def get_top_stocks():
-    # List of major tech stocks
     symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN']
     try:
-        # Fetch all stock data in one batch
         data = yf.download(
             ' '.join(symbols),
             period='1d',
