@@ -103,24 +103,76 @@ def delete_trade(trade_id):
 # stock ticker
 @app.route("/top-stocks")
 def get_top_stocks():
+    # List of major stock symbols
+    symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'NFLX', 'META', 'AMD', 'INTC']
     try:
-        tickers = ["AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "NVDA", "NFLX", "META", "AMD", "INTC"]
-        stock_data = []
-
-        for symbol in tickers:
+        stocks_data = []
+        for symbol in symbols:
             stock = yf.Ticker(symbol)
-            data = stock.info
-            stock_data.append({
-                "symbol": symbol,
-                "price": round(data.get("currentPrice", 0), 2),
-                "changePercent": round(data.get("regularMarketChangePercent", 0), 2)
+            info = stock.info
+            stocks_data.append({
+                'symbol': symbol,
+                'price': info.get('regularMarketPrice', 0),
+                'changePercent': info.get('regularMarketChangePercent', 0)
             })
-
-        return jsonify(stock_data)
+        return jsonify(stocks_data)
     except Exception as e:
-        print("Error fetching Yahoo stock data:", e)
-        return jsonify({"error": "Failed to fetch stocks"}), 500
-    
+        print(f"Error fetching stock data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/all-stocks")
+def get_all_stocks():
+    # Get S&P 500 symbols
+    sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    import pandas as pd
+    try:
+        df = pd.read_html(sp500_url)[0]
+        symbols = df['Symbol'].tolist()[:100]  # Get first 100 symbols for better performance
+        
+        # Fetch data in batches
+        batch_size = 10
+        stocks_data = []
+        
+        for i in range(0, len(symbols), batch_size):
+            batch_symbols = symbols[i:i + batch_size]
+            # Create a string of symbols for batch download
+            symbols_str = ' '.join(batch_symbols)
+            
+            try:
+                # Download data for the batch
+                data = yf.download(symbols_str, period='1d', group_by='ticker', progress=False)
+                
+                # Process each symbol in the batch
+                for symbol in batch_symbols:
+                    try:
+                        if isinstance(data, pd.DataFrame):
+                            # Single symbol case
+                            price = data['Close'].iloc[-1]
+                            prev_price = data['Open'].iloc[0]
+                        else:
+                            # Multiple symbols case
+                            price = data[symbol]['Close'].iloc[-1]
+                            prev_price = data[symbol]['Open'].iloc[0]
+                            
+                        change_percent = ((price - prev_price) / prev_price) * 100
+                        
+                        stocks_data.append({
+                            'symbol': symbol,
+                            'price': round(price, 2),
+                            'changePercent': round(change_percent, 2)
+                        })
+                    except Exception as e:
+                        print(f"Error processing {symbol}: {str(e)}")
+                        continue
+                        
+            except Exception as e:
+                print(f"Error fetching batch: {str(e)}")
+                continue
+        
+        return jsonify(stocks_data)
+    except Exception as e:
+        print(f"Error fetching stock data: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
