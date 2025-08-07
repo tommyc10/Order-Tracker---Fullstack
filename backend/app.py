@@ -52,6 +52,31 @@ def get_trades():
     else:
         return jsonify({"error": "Database connection failed"}), 500
 
+# GET single trade by ID
+@app.route("/trades/<int:trade_id>", methods=["GET"])
+def get_trade(trade_id):
+    conn = get_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM orders WHERE id=%s", (trade_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"error": "Trade not found"}), 404
+
+    trade = {
+        "id": row[0],
+        "asset": row[1],
+        "quantity": row[2],
+        "order_type": row[3],
+        "status": row[4],
+        "timestamp": row[5].strftime("%Y-%m-%d %H:%M:%S")
+    }
+    return jsonify(trade)
+
 # POST a new order
 @app.route("/trades", methods=["POST"])
 def add_trade():
