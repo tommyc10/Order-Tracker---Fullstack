@@ -103,7 +103,7 @@ def delete_trade(trade_id):
 # Stock data endpoint
 @app.route("/top-stocks")
 def get_top_stocks():
-    symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN']
+    symbols = ['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'NFLX', 'META', 'AMD', 'INTC']
     try:
         data = yf.download(
             ' '.join(symbols),

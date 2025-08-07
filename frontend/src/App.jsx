@@ -1,4 +1,4 @@
-// Helper to get stock names for demo (expand as needed)
+// maps stock tickers to company names - no ticker = symbol
 const stockNames = {
   AAPL: 'Apple Inc.',
   TSLA: 'Tesla Inc.',
@@ -19,7 +19,7 @@ function getStockName(symbol) {
 import React, { useEffect, useState } from 'react';
 import './App.css';
 
-
+// fetches the live stock from the backend
 function useLiveStocks() {
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,22 +49,93 @@ function useLiveStocks() {
 
   return { stocks, loading, error };
 }
-
+// gets the live stock data
 function App() {
   const { stocks, loading, error } = useLiveStocks();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [trades, setTrades] = useState([]);
+  const [loadingTrades, setLoadingTrades] = useState(true);
   const itemsPerPage = 15;
 
-  // Form state
+  // Handle status update
+  const handleStatusUpdate = async (tradeId, newStatus) => {
+    try {
+      const res = await fetch(`http://localhost:5001/trades/${tradeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...trades.find(t => t.id === tradeId),
+          status: newStatus
+        })
+      });
+
+      if (!res.ok) throw new Error('Failed to update status');
+
+      // Update local state
+      setTrades(trades.map(trade =>
+        trade.id === tradeId
+          ? { ...trade, status: newStatus }
+          : trade
+      ));
+
+    } catch (err) {
+      alert('Failed to update status: ' + err.message);
+    }
+  };
+
+  // handle trade deletion
+  const handleDelete = async (tradeId) => {
+    if (!confirm('Are you sure you want to delete this trade?')) return;
+
+    try {
+      const res = await fetch(`http://localhost:5001/trades/${tradeId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('Failed to delete trade');
+
+      // Remove the trade from local state
+      setTrades(trades.filter(trade => trade.id !== tradeId));
+      alert('Trade deleted successfully');
+    } catch (err) {
+      alert('Failed to delete trade: ' + err.message);
+    }
+  };
+
+  // Fetch trades
+  useEffect(() => {
+    async function fetchTrades() {
+      try {
+        setLoadingTrades(true);
+        const res = await fetch('http://localhost:5001/trades');
+        if (!res.ok) throw new Error('Failed to fetch trades');
+        const data = await res.json();
+        setTrades(data);
+      } catch (err) {
+        console.error('Error fetching trades:', err);
+      } finally {
+        setLoadingTrades(false);
+      }
+    }
+
+    fetchTrades();
+    // Refresh trades every minute
+    const interval = setInterval(fetchTrades, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // form for new trades
   const [formData, setFormData] = useState({
     asset: '',
     quantity: '',
     order_type: 'buy',
-    status: 'pending'
+    status: 'completed'
   });
 
-  // Handle form input changes
+  // handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -73,26 +144,37 @@ function App() {
     }));
   };
 
-  // Handle form submission
+  // handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Check if the asset exists in our stockNames
+    const assetExists = Object.keys(stockNames).includes(formData.asset.toUpperCase());
+    if (!assetExists) {
+      alert('Invalid ticker symbol. Please enter a valid stock ticker from the list.');
+      return;
+    }
+
     try {
       const res = await fetch('http://localhost:5001/trades', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          asset: formData.asset.toUpperCase() // Ensure ticker is uppercase
+        })
       });
 
       if (!res.ok) throw new Error('Failed to submit order');
 
-      // Clear form on success
+      // clear form on success
       setFormData({
         asset: '',
         quantity: '',
         order_type: 'buy',
-        status: 'pending'
+        status: 'completed'
       });
 
       alert('Order submitted successfully!');
@@ -101,13 +183,13 @@ function App() {
     }
   };
 
-  // Filter stocks based on search
+  // filter stocks based on search
   const filteredStocks = stocks.filter(stock =>
     stock.symbol.toLowerCase().includes(search.toLowerCase()) ||
     getStockName(stock.symbol).toLowerCase().includes(search.toLowerCase())
   );
 
-  // Calculate pagination
+  // calculate pagination
   const totalPages = Math.ceil(filteredStocks.length / itemsPerPage);
   const paginatedStocks = filteredStocks.slice(
     (page - 1) * itemsPerPage,
@@ -171,6 +253,7 @@ function App() {
                 value={formData.asset}
                 onChange={handleInputChange}
                 placeholder="e.g. TSLA"
+                list="stocksList"
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -182,6 +265,13 @@ function App() {
                 }}
                 required
               />
+              <datalist id="stocksList">
+                {Object.keys(stockNames).map(symbol => (
+                  <option key={symbol} value={symbol}>
+                    {stockNames[symbol]}
+                  </option>
+                ))}
+              </datalist>
             </div>
             <div className="mb-3">
               <label style={{
@@ -458,6 +548,164 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* Order History Section */}
+          <div className="mt-5">
+            <h2 style={{
+              fontSize: '20px',
+              fontWeight: 600,
+              color: '#fff',
+              marginBottom: '24px'
+            }}>Order History</h2>
+
+            <div style={{
+              width: '100%',
+              overflowX: 'auto'
+            }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'separate',
+                borderSpacing: '0 4px',
+                fontSize: '14px'
+              }}>
+                <thead>
+                  <tr style={{ color: '#9da6b3' }}>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      fontWeight: 500
+                    }}>ID</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'left',
+                      fontWeight: 500
+                    }}>Asset</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'right',
+                      fontWeight: 500
+                    }}>Quantity</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'center',
+                      fontWeight: 500
+                    }}>Type</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'center',
+                      fontWeight: 500
+                    }}>Status</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'right',
+                      fontWeight: 500
+                    }}>Timestamp</th>
+                    <th style={{
+                      padding: '12px 16px',
+                      textAlign: 'center',
+                      fontWeight: 500
+                    }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingTrades ? (
+                    <tr>
+                      <td colSpan="6" style={{
+                        padding: '16px',
+                        textAlign: 'center',
+                        background: '#1c2030',
+                        borderRadius: '8px',
+                        color: '#9da6b3'
+                      }}>Loading orders...</td>
+                    </tr>
+                  ) : trades.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{
+                        padding: '16px',
+                        textAlign: 'center',
+                        background: '#1c2030',
+                        borderRadius: '8px',
+                        color: '#9da6b3'
+                      }}>No orders found</td>
+                    </tr>
+                  ) : (
+                    trades.map((trade) => (
+                      <tr key={trade.id} style={{
+                        background: '#1c2030',
+                        transition: 'all 0.2s'
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#252c3e'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#1c2030'}
+                      >
+                        <td style={{
+                          padding: '12px 16px',
+                          borderTopLeftRadius: '8px',
+                          borderBottomLeftRadius: '8px'
+                        }}>#{trade.id}</td>
+                        <td style={{
+                          padding: '12px 16px'
+                        }}>{trade.asset}</td>
+                        <td style={{
+                          padding: '12px 16px',
+                          textAlign: 'right'
+                        }}>{trade.quantity}</td>
+                        <td style={{
+                          padding: '12px 16px',
+                          textAlign: 'center',
+                          color: trade.order_type === 'buy' ? '#4caf50' : '#ef5350'
+                        }}>{trade.order_type.toUpperCase()}</td>
+                        <td style={{
+                          padding: '12px 16px',
+                          textAlign: 'center'
+                        }}>
+                          <span style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            background: trade.status === 'completed' ? '#4caf5033' :
+                              trade.status === 'pending' ? '#ff980033' : '#ef535033',
+                            color: trade.status === 'completed' ? '#4caf50' :
+                              trade.status === 'pending' ? '#ff9800' : '#ef5350'
+                          }}>
+                            {trade.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{
+                          padding: '12px 16px',
+                          textAlign: 'right',
+                          color: '#9da6b3',
+                          borderTopRightRadius: '8px',
+                          borderBottomRightRadius: '8px'
+                        }}>{trade.timestamp}</td>
+                        <td style={{
+                          padding: '12px 16px',
+                          textAlign: 'center'
+                        }}>
+                          <button
+                            onClick={() => handleDelete(trade.id)}
+                            style={{
+                              padding: '6px 12px',
+                              background: '#ef535033',
+                              border: 'none',
+                              borderRadius: '4px',
+                              color: '#ef5350',
+                              fontSize: '14px',
+                              cursor: 'pointer',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseOver={(e) => e.currentTarget.style.background = '#ef535066'}
+                            onMouseOut={(e) => e.currentTarget.style.background = '#ef535033'}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
